@@ -163,3 +163,33 @@ def segment_recall(recall_by_theme):
     # sum weighted recall
     seg_rec = sum([v['recall'] * v['weight'] for v in recall_by_theme.values()])
     return seg_rec
+
+
+def create_mapping(clustering_dir):
+    cluster_files = [i for i in os.listdir(clustering_dir) if i.startswith("cluster_iter_")]
+    num_iter = len(cluster_files)
+    mapping = [None]*num_iter
+    for f in cluster_files:
+        with open(os.path.join(clustering_dir, f"cluster_iter_{num_iter-1}.json")) as f:
+            cluster_map = json.load(f)
+            cluster_map_reverse = {}
+            for k in cluster_map.keys():
+                cluster_map_reverse.update({v.lower(): k.lower() for v in cluster_map[k]})
+        mapping[num_iter-1]=cluster_map_reverse
+        num_iter -= 1
+    generated_label_map = mapping[0].copy()
+    print(f"Number of generated labels: {len(generated_label_map.keys())}")
+
+    abandoned_labels = {}
+    num_iter = len(mapping)
+    for i in range(1, num_iter):    
+        for k in list(generated_label_map.keys()):
+            try:
+                new_key = generated_label_map[k]
+                generated_label_map[k] =  mapping[i][new_key]
+            except KeyError:
+                abandoned_labels.setdefault(i, []).append(new_key)
+                generated_label_map.pop(k)
+        print(f"Iteration {i}: {len(generated_label_map.keys())} labels left")
+    print(f"Abandoned labels during clustering: {abandoned_labels}")
+    return generated_label_map

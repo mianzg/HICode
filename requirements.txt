@@ -1,0 +1,5 @@
+datasets == 3.3.2
+openai == 1.63.2
+sentence-transformers == 3.4.1
+tqdm == 4.67.1
+torch == 2.5.1
