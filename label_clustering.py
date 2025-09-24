@@ -2,7 +2,7 @@ from openai import OpenAI
 from tqdm import tqdm
 import json
 import os
-
+import uuid
 
 def process_labels(data):
     labels = []
@@ -85,18 +85,26 @@ def _run_batch(client, system_prompt, cluster_model_name, user_input):
         model_output = {}
     return model_output
             
-def cluster_labels_gpt(generation_result, system_prompt, config):
+def cluster_labels_gpt(generation_result, system_prompt, config, save_intermediate=True, gen_result_id=None, max_n_iter=3):
+    if type(generation_result) is str:
+        with open(generation_result, "r") as f:
+            generation_result = json.load(f)
+
     labels_to_cluster = process_labels(generation_result)
     # Param
     cluster_model_name = config["cluster_model_name"]
-    max_n_iter = config["max_n_iter"] if "max_n_iter" in config else 3 #CHANGE ME
-    output_dir = config["cluster_output_dir"]
+    max_n_iter = config["max_n_iter"] if "max_n_iter" in config else max_n_iter
 
     print(f"========Run {cluster_model_name} Clustering=========")
     api_key = os.getenv("OPENAI_API_KEY")
     client = OpenAI(api_key=api_key)
-    # system_prompt = gen_system_prompt(dataset)
-
+    
+    if gen_result_id is None:
+        print("The output id of label generation is not provided. The clustering output will use a new uuid.")
+        output_id = uuid.uuid1()
+    else:
+        output_id = gen_result_id
+    cluster_list = []
     for i in range(max_n_iter):
         batch_size = 100
         n_batch = len(labels_to_cluster) // batch_size if len(labels_to_cluster) % batch_size == 0 else len(labels_to_cluster) // batch_size + 1
@@ -110,8 +118,19 @@ def cluster_labels_gpt(generation_result, system_prompt, config):
                 for k in model_output.keys():
                     cluster.setdefault(k, []).extend(model_output[k])
         labels_to_cluster = list(cluster.keys())
+        cluster_list.append(cluster)
         # save intermediate results
-        # save_iteration(cluster, i, dataset, cluster_model_name, generation_model_name, output_dir)
+        if save_intermediate:
+            save_iteration(cluster_result = cluster, n_iter = i, 
+                           config = config, output_id = output_id)
+            print(f"Saved iteration {i} clustering result to {os.path.join(config['cluster_output_dir'], f'clustering_{output_id}', f'cluster_iter_{i}.json')}")
         if n_batch <= 1:
             break
-    return cluster
+    return cluster_list
+
+def save_iteration(cluster_result, n_iter, config, output_id):
+    result_dir = os.path.join(config["cluster_output_dir"], f"clustering_{output_id}")
+    if not os.path.exists(result_dir):
+        os.makedirs(result_dir)
+    with open(os.path.join(result_dir, f"cluster_iter_{n_iter}.json"), "w") as f:
+        json.dump(cluster_result, f, indent=4)

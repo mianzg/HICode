@@ -1,12 +1,8 @@
 from openai import OpenAI
-
-import yaml
-import argparse
+import uuid
 import os
 from tqdm import tqdm
-from generation_data_loader import *
-from utils import *
-
+import json
 
 def clean_label(raw_label): # move to utils 
     labels = raw_label.split("\n")
@@ -58,3 +54,14 @@ def generate_labels_gpt(data_processed, system_prompt, config):
             }
             doc_dict.setdefault("LLM_Annotation", []).append(annotation)
     return output
+
+def save_generation_output(output, output_fpath_dir, output_id = None):
+    if output_id is None:
+        output_id = uuid.uuid1()
+    if not os.path.exists(output_fpath_dir):
+        os.makedirs(output_fpath_dir)
+    output_fpath = os.path.join(output_fpath_dir, f"generation_{output_id}.json")
+    print(f"Saving generation output to {output_fpath}")
+    with open(output_fpath, "w", encoding="utf-8") as f:
+        json.dump(output, f, indent=4)
+    return output_id
