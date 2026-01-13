@@ -14,7 +14,7 @@ def process_labels(data):
 
 
 def make_clustering_prompt(goal=None, dataset=None):
-    if dataset is None and goal is not None:
+    if dataset is None and goal is None:
         raise ValueError("If dataset is None, the description of the goal of inductive coding must be provided.")
     if dataset is not None:
         if dataset == "mediacorpus":
