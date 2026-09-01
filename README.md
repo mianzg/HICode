@@ -12,7 +12,7 @@ Code repository for EMNLP 2025 long paper HICode: Hierarchical Inductive Coding 
 ### Installation
 
 ```bash
-pip install requirements.txt
+pip install -r requirements.txt
 ```
 
 ## Quickstart
