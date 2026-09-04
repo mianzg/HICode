@@ -24,14 +24,12 @@ See [`demo.ipynb`](https://github.com/mianzg/HICode/blob/main/demo.ipynb) for a 
 If you use HICode in your research, please cite:
 
 ```{}
-@misc{zhong2025hicodehierarchicalinductivecoding,
-      title={HICode: Hierarchical Inductive Coding with LLMs}, 
-      author={Mian Zhong and Pristina Wang and Anjalie Field},
-      year={2025},
-      eprint={2509.17946},
-      archivePrefix={arXiv},
-      primaryClass={cs.CL},
-      url={https://arxiv.org/abs/2509.17946}, 
+@inproceedings{zhong2025hicode,
+  title={Hicode: Hierarchical inductive coding with llms},
+  author={Zhong, Mian and Wang, Pristina and Field, Anjalie},
+  booktitle={Proceedings of the 2025 Conference on Empirical Methods in Natural Language Processing},
+  pages={31048--31066},
+  year={2025}
 }
 ```
 
