@@ -118,18 +118,29 @@ def cluster_labels_gpt(generation_result, system_prompt, config, save_intermedia
         print(f"Number of batches: {n_batch}")
         # run clustering by batch: batches within an iteration are independent,
         # so run them concurrently but merge in batch-index order for determinism
-        cluster = {}
+        batch_inputs = [str(labels_to_cluster[b*batch_size:(b+1)*batch_size]) for b in range(n_batch)]
+        results, failed = [None] * n_batch, []
         with ThreadPoolExecutor(max_workers=max_concurrency) as executor:
             futures = [
-                executor.submit(_run_batch, client, system_prompt, cluster_model_name,
-                                str(labels_to_cluster[b*batch_size:(b+1)*batch_size]))
+                executor.submit(_run_batch, client, system_prompt, cluster_model_name, batch_inputs[b])
                 for b in range(n_batch)
             ]
-            for future in tqdm(futures):
-                model_output = future.result()
-                if model_output != {}:
-                    for k in model_output.keys():
-                        cluster.setdefault(k, []).extend(model_output[k])
+            for b, future in enumerate(tqdm(futures)):
+                try:
+                    results[b] = future.result()
+                except Exception as e:
+                    print(f"Batch {b} failed: {e}")
+                    failed.append(b)
+        for b in failed:
+            try:
+                results[b] = _run_batch(client, system_prompt, cluster_model_name, batch_inputs[b])
+            except Exception as e:
+                print(f"Batch {b} failed again; its labels are dropped from iteration {i}: {e}")
+                results[b] = {}
+        cluster = {}
+        for model_output in results:
+            for k in model_output.keys():
+                cluster.setdefault(k, []).extend(model_output[k])
         labels_to_cluster = list(cluster.keys())
         cluster_list.append(cluster)
         # save intermediate results

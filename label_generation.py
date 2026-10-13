@@ -1,5 +1,6 @@
 from openai import OpenAI
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import hashlib
 import uuid
 import os
 from tqdm import tqdm
@@ -40,17 +41,29 @@ def _label_one_segment(client, system_prompt, model_name, segment_id, text_to_la
         return segment_id, None
     return segment_id, clean_label(raw_label)
 
-def _load_checkpoint(checkpoint_path):
+def _checkpoint_header(model_name, system_prompt):
+    prompt_hash = hashlib.sha256(system_prompt.encode("utf-8")).hexdigest()[:16]
+    return {"model": model_name, "prompt_hash": prompt_hash}
+
+def _load_checkpoint(checkpoint_path, header):
     completed = {}
-    if checkpoint_path and os.path.exists(checkpoint_path):
-        with open(checkpoint_path, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                record = json.loads(line)
-                completed[record["segment_id"]] = record["labels"]
-        print(f"Resuming from checkpoint {checkpoint_path}: {len(completed)} segments already done.")
+    if not (checkpoint_path and os.path.exists(checkpoint_path)):
+        return completed
+    with open(checkpoint_path, "r", encoding="utf-8") as f:
+        lines = [line.strip() for line in f if line.strip()]
+    if not lines:
+        return completed
+    found = json.loads(lines[0])
+    if found != header:
+        raise ValueError(
+            f"Checkpoint {checkpoint_path} was created with different settings "
+            f"(checkpoint: {found}, current run: {header}). "
+            "Delete the file or set a new checkpoint_path."
+        )
+    for line in lines[1:]:
+        record = json.loads(line)
+        completed[record["segment_id"]] = record["labels"]
+    print(f"Resuming from checkpoint {checkpoint_path}: {len(completed)} segments already done.")
     return completed
 
 def generate_labels_gpt(data_processed, system_prompt, config):
@@ -65,13 +78,18 @@ def generate_labels_gpt(data_processed, system_prompt, config):
     checkpoint_path = config.get("checkpoint_path")
 
     # segment_id -> labels (or None for irrelevant); pre-filled from checkpoint
-    results = _load_checkpoint(checkpoint_path)
+    header = _checkpoint_header(model_name, system_prompt)
+    results = _load_checkpoint(checkpoint_path, header)
     pending = [k for k in data_processed.keys() if k not in results]
 
     checkpoint_file = None
     if checkpoint_path:
         os.makedirs(os.path.dirname(checkpoint_path) or ".", exist_ok=True)
+        is_new = not os.path.exists(checkpoint_path) or os.path.getsize(checkpoint_path) == 0
         checkpoint_file = open(checkpoint_path, "a", encoding="utf-8")
+        if is_new:
+            checkpoint_file.write(json.dumps(header) + "\n")
+            checkpoint_file.flush()
 
     failed = []
     try:
