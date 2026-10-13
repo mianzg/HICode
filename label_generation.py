@@ -62,9 +62,21 @@ def _load_checkpoint(checkpoint_path, header):
         )
     for line in lines[1:]:
         record = json.loads(line)
+        if record.get("failed"):
+            continue
         completed[record["segment_id"]] = record["labels"]
     print(f"Resuming from checkpoint {checkpoint_path}: {len(completed)} segments already done.")
     return completed
+
+def _unresolved_failures(checkpoint_path):
+    failed, succeeded = set(), set()
+    with open(checkpoint_path, "r", encoding="utf-8") as f:
+        for line in list(f)[1:]:
+            if not line.strip():
+                continue
+            record = json.loads(line)
+            (failed if record.get("failed") else succeeded).add(record["segment_id"])
+    return failed - succeeded
 
 def generate_labels_gpt(data_processed, system_prompt, config):
     api_key = os.getenv("OPENAI_API_KEY")
@@ -105,6 +117,9 @@ def generate_labels_gpt(data_processed, system_prompt, config):
                 except Exception as e:
                     failed.append(k)
                     print(f"Segment {k} failed: {e}")
+                    if checkpoint_file:
+                        checkpoint_file.write(json.dumps({"segment_id": k, "failed": True}) + "\n")
+                        checkpoint_file.flush()
                     continue
                 results[segment_id] = labels
                 if checkpoint_file:
@@ -131,7 +146,7 @@ def generate_labels_gpt(data_processed, system_prompt, config):
         doc_dict.setdefault("LLM_Annotation", []).append(annotation)
     return output
 
-def save_generation_output(output, output_fpath_dir, output_id = None):
+def save_generation_output(output, output_fpath_dir, output_id = None, checkpoint_path = None, keep_checkpoint = False):
     if output_id is None:
         output_id = uuid.uuid1()
     if not os.path.exists(output_fpath_dir):
@@ -140,4 +155,14 @@ def save_generation_output(output, output_fpath_dir, output_id = None):
     print(f"Saving generation output to {output_fpath}")
     with open(output_fpath, "w", encoding="utf-8") as f:
         json.dump(output, f, indent=4)
+
+    if checkpoint_path and os.path.exists(checkpoint_path) and not keep_checkpoint:
+        unresolved = _unresolved_failures(checkpoint_path)
+        if unresolved:
+            print(f"Keeping checkpoint {checkpoint_path}: {len(unresolved)} segments failed. "
+                  "Re-run generation to retry only those segments.")
+        else:
+            print(f"Final results are saved to {output_fpath}, so the checkpoint "
+                  f"{checkpoint_path} is no longer needed and will be deleted.")
+            os.remove(checkpoint_path)
     return output_id
