@@ -19,6 +19,19 @@ pip install requirements.txt
 
 See [`demo.ipynb`](https://github.com/mianzg/HICode/blob/main/demo.ipynb) for a step-by-step example of how to use HICode for identifying the query types asked by astronomers.
 
+## Configuration
+
+The pipeline is configured through a plain `config` dict (see the demo notebook). Optional keys:
+
+| Key | Default | Description |
+|---|---|---|
+| `max_concurrency` | `8` | Number of concurrent API requests in generation and clustering. Independent calls run in a thread pool, so large corpora finish roughly `max_concurrency`× faster. |
+| `checkpoint_path` | `None` | If set, generation appends one JSONL line per completed segment. Re-running with the same path resumes and skips completed segments (delete the file to start fresh). Pass it to `save_generation_output` to delete the checkpoint once the final results are saved; it is kept if any segment failed, so a re-run retries only those. |
+| `max_retries` | `5` | Retries with exponential backoff on rate limits (429) and transient errors, handled by the OpenAI client. |
+| `cluster_batch_size` | `100` | Number of labels packed into each clustering prompt. |
+| `base_url` | `None` | Point the OpenAI client at any OpenAI-compatible endpoint (e.g. vLLM, Ollama, Together) to use open-source or other proprietary models. |
+
+
 ## Cite the work
 
 If you use HICode in your research, please cite:
